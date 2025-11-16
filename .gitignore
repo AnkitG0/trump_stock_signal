@@ -8,3 +8,4 @@
 *.csv
 *.jsonl
 *.jsonl.gz
+!*requirements.txt
