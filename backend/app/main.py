@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from typing import List
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from .models import Signal
 from .truth_client import fetch_trump_posts
@@ -20,14 +21,24 @@ app.add_middleware(
 )
 
 @app.get("/api/latest-signals", response_model=list[Signal])
-async def latest_signals(limit: int = 4):
-    """Get the latest Trump Truth Signals"""
-    posts = await fetch_trump_posts()
-    signals: list[Signal] = []
-    for post in posts:
-        sentiment = classify_sentiment(post.get("text"))
+def latest_signals():
+    """
+    1. Fetch latest Truth Social posts via truth_client
+    2. Run FinBERT sentiment on each
+    3. Map sentiment -> BUY / HOLD / SELL
+    """
+    try:
+        posts = fetch_trump_posts()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error fetching posts: {e}")
+
+    signals: List[Signal] = []
+
+    for p in posts:
+        sentiment = classify_sentiment(p.text)
         signal = map_sentiment_to_signal(sentiment)
-        signals.append(Signal(post=post, sentiment=sentiment, signal=signal))
+        signals.append(Signal(post=p, sentiment=sentiment, signal=signal))
+
     return signals
 
 @app.get("/health")
