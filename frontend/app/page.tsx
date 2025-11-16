@@ -1,15 +1,6 @@
 // frontend/app/page.tsx
 import SignalCard from "@/components/SignalCard";
-
-type Signal = {
-  post: {
-    id: string;
-    created_at: string;
-    text: string;
-  };
-  sentiment: string;
-  signal: string;
-};
+import { Signal } from "@/types/signal";
 
 async function getSignals(): Promise<Signal[]> {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -26,7 +17,8 @@ async function getSignals(): Promise<Signal[]> {
     throw new Error("Failed to fetch signals");
   }
 
-  return res.json();
+  const data: Signal[] = await res.json();
+  return data;
 }
 
 export default async function Home() {

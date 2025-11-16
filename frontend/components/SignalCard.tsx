@@ -1,12 +1,4 @@
-type Signal = {
-    post: {
-        text: string;
-        created_at: string;
-        id: number;
-    };
-sentiment: string;
-signal: string;
-}; 
+import { Signal } from "@/types/signal";
 
 export default function SignalCard({ signal }: { signal: Signal }) {
     const created = new Date(signal.post.created_at);
