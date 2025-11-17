@@ -1,30 +1,46 @@
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
-import torch
-import numpy as np
+# backend/app/ml_pipeline.py
 
-MODEL_NAME = 'yiyanghkust/finbert-tone'
+import os
+import requests
+from typing import Tuple
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+HUGGINGFACE_API_URL = (
+    "https://api-inference.huggingface.co/models/yiyanghkust/finbert-tone"
+)
+HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
 
-model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
 
-finbert = pipeline("sentiment-analysis", model=model, tokenizer=tokenizer)
+def _hf_request(text: str) -> dict:
+    if not HUGGINGFACE_API_TOKEN:
+        raise RuntimeError("HUGGINGFACE_API_TOKEN is not set")
 
-label_map = {
-    0: 'bearish',
-    1: 'neutral',
-    2: 'bullish'
-}
+    headers = {
+        "Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}",
+        "Accept": "application/json",
+    }
+    payload = {"inputs": text}
+
+    resp = requests.post(HUGGINGFACE_API_URL, headers=headers, json=payload, timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
 
 def classify_sentiment(text: str) -> str:
     """
-    Run FinBERT on the given text.
+    Use remote FinBERT to classify text.
 
     Returns:
         "bullish" | "bearish" | "neutral"
     """
-    result = finbert(text)[0]
-    label = result["label"].lower()  # e.g. "positive", "negative", "neutral"
+    data = _hf_request(text)
+
+    # Hugging Face inference API returns a list of lists of dicts:
+    # [[{"label": "positive", "score": 0.9}, {"label": "neutral", ...}, ...]]
+    if not data or not isinstance(data, list):
+        raise RuntimeError(f"Unexpected HF response: {data}")
+
+    top = data[0][0]  # highest score
+    label = top["label"].lower()  # "positive" | "negative" | "neutral"
 
     if "pos" in label:
         return "bullish"
@@ -36,18 +52,16 @@ def classify_sentiment(text: str) -> str:
 
 def map_sentiment_to_signal(sentiment: str) -> str:
     """
-    Maps ML output → trading-like signal for your UI.
-    Not real financial advice — just rule-based.
+    Map sentiment to a simple demo trading signal.
     """
-
     if sentiment == "bullish":
         return "BUY"
     elif sentiment == "bearish":
         return "SELL"
     else:
         return "HOLD"
-    
-# Quick local test
+
+
 if __name__ == "__main__":
     examples = [
         "The stock market is doing fantastically well. Huge gains!",
