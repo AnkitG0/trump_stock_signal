@@ -4,9 +4,14 @@ import os
 import requests
 from typing import Tuple
 
+# HUGGINGFACE_API_URL = (
+#     "https://api-inference.huggingface.co/models/yiyanghkust/finbert-tone"
+# )
+
 HUGGINGFACE_API_URL = (
-    "https://api-inference.huggingface.co/models/yiyanghkust/finbert-tone"
+    "https://api-inference.huggingface.co/models/distilbert-base-uncased-finetuned-sst-2-english"
 )
+
 HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
 
 
@@ -27,27 +32,41 @@ def _hf_request(text: str) -> dict:
 
 def classify_sentiment(text: str) -> str:
     """
-    Use remote FinBERT to classify text.
+    Use remote DistilBERT sentiment model.
 
     Returns:
         "bullish" | "bearish" | "neutral"
     """
     data = _hf_request(text)
 
-    # Hugging Face inference API returns a list of lists of dicts:
-    # [[{"label": "positive", "score": 0.9}, {"label": "neutral", ...}, ...]]
-    if not data or not isinstance(data, list):
+    # HF returns: [{"label": "POSITIVE", "score": 0.98}] or a list-of-lists in some cases
+    if not data:
         raise RuntimeError(f"Unexpected HF response: {data}")
 
-    top = data[0][0]  # highest score
-    label = top["label"].lower()  # "positive" | "negative" | "neutral"
+    # Normalize to a single dict
+    if isinstance(data, list):
+        # sometimes [[{...}]]; sometimes [{...}]
+        first = data[0]
+        if isinstance(first, list):
+            top = first[0]
+        else:
+            top = first
+    elif isinstance(data, dict):
+        top = data
+    else:
+        raise RuntimeError(f"Unexpected HF response structure: {data}")
 
-    if "pos" in label:
+    label = str(top.get("label", "")).lower()  # "positive" | "negative"
+    score = float(top.get("score", 0.0))
+
+    # Basic mapping: high-confidence positive/negative -> bullish/bearish
+    if "pos" in label and score >= 0.6:
         return "bullish"
-    elif "neg" in label:
+    elif "neg" in label and score >= 0.6:
         return "bearish"
     else:
         return "neutral"
+
 
 
 def map_sentiment_to_signal(sentiment: str) -> str:
